@@ -1,0 +1,156 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum AdminRole {
+  SUPER_ADMIN
+  EDITOR
+}
+
+enum SiteRole {
+  OWNER
+  EDITOR
+  VIEWER
+}
+
+enum ApiTokenRole {
+  READ_ONLY
+  READ_WRITE
+}
+
+enum DomainStatus {
+  PENDING
+  VERIFIED
+  FAILED
+}
+
+enum PostStatus {
+  DRAFT
+  PUBLISHED
+}
+
+model AdminUser {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         AdminRole @default(EDITOR)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  resetToken    String?
+  resetExpires  DateTime?
+
+  posts        BlogPost[]
+  memberships  AdminSiteMembership[]
+}
+
+model BlogPost {
+  id            String     @id @default(cuid())
+  siteId        String
+  site          Site       @relation(fields: [siteId], references: [id])
+  title         String
+  slug          String
+  excerpt       String?
+  coverImageUrl String?
+  contentHtml   String
+  status        PostStatus @default(DRAFT)
+  publishedAt   DateTime?
+
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  authorId      String
+  author        AdminUser  @relation(fields: [authorId], references: [id])
+
+  tags          BlogPostTag[]
+
+  @@unique([siteId, slug])
+}
+
+model Tag {
+  id        String   @id @default(cuid())
+  siteId    String
+  site      Site     @relation(fields: [siteId], references: [id])
+  name      String
+  slug      String
+  createdAt DateTime @default(now())
+
+  posts     BlogPostTag[]
+
+  @@unique([siteId, slug])
+  @@unique([siteId, name])
+}
+
+model BlogPostTag {
+  postId String
+  tagId  String
+
+  post   BlogPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  tag    Tag      @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([postId, tagId])
+}
+
+model Site {
+  id             String                 @id @default(cuid())
+  name           String
+  slug           String                 @unique
+  domains        String[]
+  defaultLocale  String?
+  settingsJson   Json?
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+
+  posts          BlogPost[]
+  tags           Tag[]
+  memberships    AdminSiteMembership[]
+  apiTokens      ApiToken[]
+  siteDomains    SiteDomain[]
+}
+
+model AdminSiteMembership {
+  id        String   @id @default(cuid())
+  adminId   String
+  siteId    String
+  role      SiteRole @default(EDITOR)
+  createdAt DateTime @default(now())
+
+  admin     AdminUser @relation(fields: [adminId], references: [id])
+  site      Site      @relation(fields: [siteId], references: [id])
+
+  @@unique([adminId, siteId])
+}
+
+model ApiToken {
+  id         String       @id @default(cuid())
+  siteId     String
+  name       String
+  hashed     String
+  role       ApiTokenRole @default(READ_ONLY)
+  expiresAt  DateTime?
+  lastUsedAt DateTime?
+  createdAt  DateTime     @default(now())
+
+  site       Site @relation(fields: [siteId], references: [id])
+}
+
+model SiteDomain {
+  id                 String        @id @default(cuid())
+  siteId             String
+  domain             String
+  verificationToken  String
+  status             DomainStatus  @default(PENDING)
+  verifiedAt         DateTime?
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+  site               Site          @relation(fields: [siteId], references: [id])
+
+  @@unique([siteId, domain])
+}
